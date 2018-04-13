@@ -45,7 +45,7 @@
        :appears_in ["EMPIRE" "JEDI"]})))
 
 (def comparissonFields
-  [:comparisonFields :Character #{:name :appearsIn}])
+  [:comparissonFields :Character #{:name :appearsIn}])
 
 (def star-wars-schema
   (-> StarWarsSchema
@@ -61,18 +61,38 @@
 
 (deftest edn-queries
   (testing "basic edn queries work"
-    (is (= "{ hero { name id } }"
-           (edn->str #{[:hero #{:id :name}]}))))
+    (is (= "query { hero { name id } }"
+           (edn->query #{[:hero #{:id :name}]}))))
   (testing "aliasing works"
-    (is (= "{ jedi: hero { name id } }"
-           (edn->str #{[:hero :jedi #{:id :name}]}))))
+    (is (= "query { jedi: hero { name id } }"
+           (edn->query #{[:hero :jedi #{:id :name}]}))))
   (testing "aliasing and arguments work"
-    (is (= "{ jedi: hero(episode: EMPIRE) { name id } }"
-           (edn->str #{[:hero :jedi {:episode "EMPIRE"} #{:id :name}]}))))
+    (is (= "query { jedi: hero(episode: EMPIRE) { name id } }"
+           (edn->query #{[:hero :jedi {:episode "EMPIRE"} #{:id :name}]}))))
   (testing "can use variables"
-    (is (= "{ hero(episode: $episode) { name id } }"
-           (edn->str #{[:hero {:episode 'episode} #{:id :name}]}))))
+    (is (= "query { hero(episode: $episode) { name id } }"
+           (edn->query #{[:hero {:episode 'episode} #{:id :name}]}))))
   (testing "can use fragments"
-    (is (= "{ hero { ...comparissonFields } } fragment comparissonFields on Character { name appearsIn }"
-           (edn->str #{[:hero #{#'comparissonFields}]}))))
-  )
+    (is (= "query { hero { ...comparissonFields } } fragment comparissonFields on Character { name appearsIn }"
+           (edn->query #{[:hero #{#'comparissonFields}]})))))
+
+(defquery simpleQuery #{[:hero #{:id :name}]})
+
+(defquery argsQuery #{[:hero {:episode ^:string 'empire} #{:id :name}]})
+
+(deftest fetch-persisted-queries
+  (testing "we can resolve a persisted query and use it"
+    (is (= {:data {:hero {:id 2000 :name "Lando Calrissian"}}}
+           (let [payload {:query (:id simpleQuery)
+                          :args  {}}]
+             (lacina/execute star-wars-schema
+                             (get-persisted-query (:query payload))
+                             (:args payload)
+                             nil))))
+    (is (= {:data {:hero {:id 2000 :name "Lando Calrissian"}}}
+           (let [payload {:query (:id )
+                          :args  {:episode :NEWHOPE}}]
+             (lacina/execute star-wars-schema
+                             (get-persisted-query (:query payload))
+                             (:args payload)
+                             nil))))))
